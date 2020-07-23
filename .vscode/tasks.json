@@ -1,0 +1,133 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "MSVC build",
+            "command": "cl.exe",
+            "args": [
+                "/Zi",
+                "/EHsc",
+                "/Fe:",
+                "${fileDirname}\\${fileBasenameNoExtension}.exe",
+                "${file}"
+            ],
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "group": "build"
+        },
+        {
+            "type": "shell",
+            "label": "g++ build",
+            "command": "g++",
+            "args": [
+                "-g",
+                "${file}",
+                "-o",
+                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+            ],
+            "options": {
+                "cwd": "C:\\Program Files\\mingw64\\bin"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+
+            "linux":{
+                "args": [
+                    "-g",
+                    "${file}",
+                    "-o",
+                    "${fileDirname}\\${fileBasenameNoExtension}"
+                ],
+                "options": {"cwd": "/usr/bin"}
+            }
+        },
+        {
+            "type": "shell",
+            "label": "gcc build",
+            "command": "gcc.exe",
+            "args": [
+                "-g",
+                "${file}",
+                "-o",
+                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+            ],
+            "options": {
+                "cwd": "C:\\Program Files\\mingw64\\bin"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+
+            "linux":{
+                "args": [
+                    "-g",
+                    "${file}",
+                    "-o",
+                    "${fileDirname}\\${fileBasenameNoExtension}"
+                ],
+                "options": {"cwd": "/usr/bin"}
+            }
+        },
+        {
+            "label": "clang++ build",
+            "command": "clang++",
+            "args": [
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}.exe",
+                "-g",
+                "--target=x86_64-w64-mingw",
+                "-std=c++11"
+            ],
+            "type": "shell",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+
+            "linux":{
+                "args": [
+                    "${file}",
+                    "-o",
+                    "${fileDirname}/${fileBasenameNoExtension}",
+                    "-g",
+                    "-std=c++11"
+                ],
+                "options": {"cwd": "/usr/bin"}
+            }
+        },
+        {
+            "label": "clang build",
+            "command": "clang",
+            "args": [
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}.exe",
+                "-g",
+                "--target=x86_64-w64-mingw",
+                "-std=c99"
+            ],
+            "type": "shell",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+
+            "linux":{
+                "args": [
+                    "${file}",
+                    "-o",
+                    "${fileDirname}/${fileBasenameNoExtension}",
+                    "-g",
+                    "-std=c99"
+                ],
+                "options": {"cwd": "/usr/bin"}
+            }
+        }
+    ]
+}
