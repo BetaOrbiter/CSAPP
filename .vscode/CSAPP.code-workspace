@@ -3,5 +3,30 @@
 		{
 			"path": ".."
 		}
-	]
+	],
+	"settings": {
+		"files.associations": {
+			"type_traits": "c",
+			"cstdlib": "c",
+			"wait.h": "c",
+			"time.h": "c",
+			"stdio.h": "c",
+			"features.h": "c",
+			"csapp.h": "c",
+			"memlib.h": "c",
+			"assert.h": "c",
+			"mm.h": "c",
+			"cctype": "c",
+			"cfloat": "c",
+			"climits": "c",
+			"cmath": "c",
+			"cstdarg": "c",
+			"cstdio": "c",
+			"limits": "c",
+			"*.tcc": "c",
+			"cstdbool": "c",
+			"cstdint": "c",
+			"typeinfo": "c"
+		}
+	}
 }
