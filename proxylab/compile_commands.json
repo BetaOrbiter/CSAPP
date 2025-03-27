@@ -1,0 +1,24 @@
+[
+    {
+        "arguments": [
+            "gcc",
+            "-c",
+            "-g",
+            "-Wall",
+            "proxy.c"
+        ],
+        "directory": "/home/lzc/src/CSAPP/proxylab",
+        "file": "proxy.c"
+    },
+    {
+        "arguments": [
+            "gcc",
+            "-c",
+            "-g",
+            "-Wall",
+            "csapp.c"
+        ],
+        "directory": "/home/lzc/src/CSAPP/proxylab",
+        "file": "csapp.c"
+    }
+]

@@ -1,1 +1,4 @@
 .vscode/
+*/.clangd/
+*/compile_command.json
+*.o
