@@ -1,5 +1,14 @@
 #define _GNU_SOURCE
 #include "csapp.h"
+#include "sbuf.h"
+
+typedef struct url_t{
+    char host[MAXLINE];
+    char port[6];
+    char path[MAXLINE];
+} url_t;
+
+#define SBUF_SIZE 100
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
@@ -13,44 +22,55 @@ static const char *proxy_connection_hdr = "Proxy-Connection: close\r\n";
 void doit(int fd);
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
-void parse_uri(char *uri, char *host, char *port, char *path);
+int parse_url(char *url, char *host, char *port, char *path);
 void splice_forward(int src_fd, int dst_fd);
+int get_cpu_count();
+void *thread(void *sbuf_ptr);
 
 int main(int argc, char *argv[])
 {
-    short listenfd;
-
     //check command-line args
     if(argc != 2){
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
-    } 
-    listenfd = Open_listenfd(argv[1]);
+    }
+
+    //预初始化环形缓冲区与线程池
+    sbuf_t *sbuf = sbuf_init(SBUF_SIZE);
+    const int cpu_count = get_cpu_count();
+    for(int i=0;i<cpu_count<<2;i++){
+        pthread_t tid;
+        pthread_create(&tid, NULL, thread, sbuf);
+        Pthread_detach(tid);
+    }
+    
+    //开始监听事件循环
+    int listenfd = Open_listenfd(argv[1]);
 
     while(1){
         struct sockaddr_storage client_con;
         socklen_t client_len = sizeof client_con;
         const int client_fd = Accept(listenfd, (SA*)&client_con, &client_len);
+        sbuf_push(sbuf, client_fd);
 
         char host[MAXLINE], port[MAXLINE];
         Getnameinfo((SA*)&client_con, client_len, host, sizeof host, port, sizeof port, 0);
         printf("Accepted connection from (%s, %s)\n", host, port);
-        doit(client_fd);
-        Close(client_fd);
     }
 
-    printf("%s", user_agent_hdr);
+    //回收资源
+    sbuf_destory(sbuf);
     return 0;
 }
 
-void doit(int client_fd){
-    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    rio_t rio;
-    Rio_readinitb(&rio, client_fd);
+void doit(const int client_fd){
+    char buf[MAXLINE], method[16], url[MAXLINE], version[16];
+    rio_t client_rio;
+    Rio_readinitb(&client_rio, client_fd);
 
     //读取与解析请求头
-    if(!Rio_readlineb(&rio, buf, MAXLINE))
+    if(!Rio_readlineb(&client_rio, buf, MAXLINE))
         return;
-    sscanf(buf, "%s %s %s", method, uri, version);
+    sscanf(buf, "%s %s %s", method, url, version);
     if (strcasecmp(method, "GET")){
         clienterror(client_fd, method, "501", "Not Implemented", 
             "proxy does not implement this method");
@@ -58,14 +78,15 @@ void doit(int client_fd){
     }
 
     //解析uri
-    char host[MAXLINE], path[MAXLINE], port[6];
-    parse_uri(uri, host, port, path);
-
-    sprintf(buf, "GET %s  HTTP/1.0\r\n%s%s%s\r\n", path, 
-        user_agent_hdr, connection_hdr, proxy_connection_hdr);
+    url_t url_info;
+    if(parse_url(url, url_info.host, url_info.port, url_info.path)){
+        clienterror(client_fd, "invaild url", "400", "Bad Request", 
+            "parse url failed");
+        return;
+    }
 
     //连接服务器
-    int server_fd = Open_clientfd(host, port);
+    int server_fd = Open_clientfd(url_info.host, url_info.port);
     if(server_fd < 0){
         clienterror(client_fd, "network", "404", "connection refused", 
             "proxy cannot connect to host");
@@ -73,8 +94,8 @@ void doit(int client_fd){
     }
 
     //转发给服务器
-    rio_t server;
-    Rio_readinitb(&server, server_fd);
+    sprintf(buf, "GET %s  HTTP/1.0\r\n%s%s%s\r\n", url_info.path, 
+        user_agent_hdr, connection_hdr, proxy_connection_hdr);
     Rio_writen(server_fd, buf, strlen(buf));
 
     //回复给客户端
@@ -114,36 +135,39 @@ void clienterror(int fd, char *cause, char *errnum,
 /* $end clienterror */
 
 /*
- * parse_uri - parse URI into host and port and path args
+ * parse_uri - parse URL into host and port and path args
  */
-/* $begin parse_uri */
-void parse_uri(char *uri, char *restrict host, char *restrict port, char *restrict path) 
+/* $begin parse_url */
+int parse_url(char *url, char *restrict host, char *restrict port, char *restrict path) 
 {
-    char *host_ptr = strstr(uri, "//");
-
-    if(host_ptr == NULL){
-        char* path_ptr = strchr(uri, '/');
-        path = strncpy(path, path_ptr, MAXLINE);
-        *port = 80;
-        return;
+    const static int http_prefix_len = strlen("http://");
+    if(strncasecmp(url, "http://", http_prefix_len)){
+        return -1;
     }
 
-    char *port_ptr = strchr(host_ptr + 2, ':');
-    if(port_ptr != NULL){
-        short port_num;
-        sscanf(port_ptr+1, "%hd%s", &port_num, path);
-        sprintf(port, "%hd", port_num);
-        *port_ptr = '\0';
-    }else{
-        char *path_ptr = strchr(host_ptr + 2, '/');
-        *port = 80;
-        strncpy(path, path_ptr, MAXLINE);
+    char *const host_ptr = url + http_prefix_len;
+    char *const port_ptr = strchr(host_ptr, ':');
+    char *const path_ptr = strchr(host_ptr, '/');
+
+    if(port_ptr == NULL){
+        strcpy(port, "80");
         *path_ptr = '\0';
+        strncpy(host, host_ptr, MAXLINE);
+        *path_ptr = '/';
+        strncpy(path, path_ptr, MAXLINE);
+    }else{
+        *port_ptr = '\0';
+        strncpy(host, host_ptr, MAXLINE);
+        *port_ptr = ':';
+        *path_ptr = '\0';
+        strncpy(port, port_ptr+1, 6);
+        *path_ptr = '/';
+        strncpy(path, path_ptr, MAXLINE);
     }
-    strncpy(host, host_ptr+2, MAXLINE);
-    return;
+
+    return 0;
 }
-/* $end parse_uri */
+/* $end parse_url */
 
 /**
  * splice_forward - zero-cpoy forward
@@ -169,3 +193,41 @@ void splice_forward(int src_fd, int dst_fd) {
     close(pipe_fds[1]);
 }
 /* $end splice_forward */
+
+/**
+ * get_cpu_count - get cpu num
+ */
+/* $begin get_cpu_count */
+int get_cpu_count(){
+    #ifdef _WIN32
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        return sysinfo.dwNumberOfProcessors;
+    
+    #elif defined(__linux__)
+        return sysconf(_SC_NPROCESSORS_ONLN);
+    
+    #elif defined(__APPLE__)
+        int count;
+        size_t size = sizeof(count);
+        sysctlbyname("hw.ncpu", &count, &size, NULL, 0);
+        return count;
+    
+    #else
+        return 1; // 默认值
+    #endif
+}
+/* $end get_cpu_count */
+
+/**
+ * 线程池处理事件循环
+ */
+/* $begin thread */
+void *thread(void *sbuf_ptr){
+    while(1){
+        const int client_fd = sbuf_pop(sbuf_ptr);
+        doit(client_fd);
+        Close(client_fd);
+    }
+}
+/* $end thread */

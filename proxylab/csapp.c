@@ -738,6 +738,11 @@ void V(sem_t *sem)
 	unix_error("V error");
 }
 
+void Sem_destroy(sem_t* sem){
+    if(sem_destroy(sem) < 0)
+    unix_error("Sem_destory error");
+}
+
 /****************************************
  * The Rio package - Robust I/O functions
  ****************************************/
