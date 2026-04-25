@@ -31,5 +31,16 @@
         ],
         "directory": "/home/lzc/src/CSAPP/proxylab",
         "file": "sbuf.c"
+    },
+    {
+        "arguments": [
+            "gcc",
+            "-c",
+            "-g",
+            "-Wall",
+            "cache.c"
+        ],
+        "directory": "/home/lzc/src/CSAPP/proxylab",
+        "file": "cache.c"
     }
 ]

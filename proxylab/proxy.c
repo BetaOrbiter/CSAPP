@@ -1,6 +1,7 @@
-#define _GNU_SOURCE
+#include <stdio.h>
 #include "csapp.h"
 #include "sbuf.h"
+#include "cache.h"
 
 typedef struct url_t{
     char host[MAXLINE];
@@ -9,10 +10,6 @@ typedef struct url_t{
 } url_t;
 
 #define SBUF_SIZE 100
-
-/* Recommended max cache and object sizes */
-#define MAX_CACHE_SIZE 1049000
-#define MAX_OBJECT_SIZE 102400
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
@@ -23,7 +20,6 @@ void doit(int fd);
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 int parse_url(char *url, char *host, char *port, char *path);
-void splice_forward(int src_fd, int dst_fd);
 int get_cpu_count();
 void *thread(void *sbuf_ptr);
 
@@ -34,7 +30,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
     }
 
-    //预初始化环形缓冲区与线程池
+    //预初始化各种资源
+    cache_init();
     sbuf_t *sbuf = sbuf_init(SBUF_SIZE);
     const int cpu_count = get_cpu_count();
     for(int i=0;i<cpu_count<<2;i++){
@@ -85,6 +82,10 @@ void doit(const int client_fd){
         return;
     }
 
+    //查询缓存
+    if(cache_query(url, client_fd))
+        return;
+
     //连接服务器
     int server_fd = Open_clientfd(url_info.host, url_info.port);
     if(server_fd < 0){
@@ -98,8 +99,8 @@ void doit(const int client_fd){
         user_agent_hdr, connection_hdr, proxy_connection_hdr);
     Rio_writen(server_fd, buf, strlen(buf));
 
-    //回复给客户端
-    splice_forward(server_fd, client_fd);
+    //添加缓存并转发
+    cache_add(url, server_fd, client_fd);
 
     Close(server_fd);
     return;
@@ -168,31 +169,6 @@ int parse_url(char *url, char *restrict host, char *restrict port, char *restric
     return 0;
 }
 /* $end parse_url */
-
-/**
- * splice_forward - zero-cpoy forward
- */
-/* $begin splice_forward */
-void splice_forward(int src_fd, int dst_fd) {
-    int pipe_fds[2];
-    if (pipe(pipe_fds) < 0) {
-        perror("pipe");
-        return;
-    }
-    
-    ssize_t n;
-    while ((n = splice(src_fd, NULL, pipe_fds[1], NULL, 8192, 
-                       SPLICE_F_MOVE | SPLICE_F_MORE)) > 0) {
-        if (splice(pipe_fds[0], NULL, dst_fd, NULL, n, 
-                   SPLICE_F_MOVE | SPLICE_F_MORE) != n) {
-            break;
-        }
-    }
-    
-    close(pipe_fds[0]);
-    close(pipe_fds[1]);
-}
-/* $end splice_forward */
 
 /**
  * get_cpu_count - get cpu num
